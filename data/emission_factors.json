@@ -1,0 +1,297 @@
+{
+  "transport": {
+    "car_gasoline": {
+      "name": "汽油车",
+      "factor": 0.21,
+      "unit": "kg CO2/km"
+    },
+    "car_diesel": {
+      "name": "柴油车",
+      "factor": 0.27,
+      "unit": "kg CO2/km"
+    },
+    "car_electric": {
+      "name": "电动汽车",
+      "factor": 0.05,
+      "unit": "kg CO2/km"
+    },
+    "car_hybrid": {
+      "name": "混合动力车",
+      "factor": 0.12,
+      "unit": "kg CO2/km"
+    },
+    "motorcycle": {
+      "name": "摩托车",
+      "factor": 0.10,
+      "unit": "kg CO2/km"
+    },
+    "bus": {
+      "name": "公交车",
+      "factor": 0.08,
+      "unit": "kg CO2/km"
+    },
+    "subway": {
+      "name": "地铁",
+      "factor": 0.04,
+      "unit": "kg CO2/km"
+    },
+    "train": {
+      "name": "火车",
+      "factor": 0.03,
+      "unit": "kg CO2/km"
+    },
+    "bicycle": {
+      "name": "自行车",
+      "factor": 0.0,
+      "unit": "kg CO2/km"
+    },
+    "walking": {
+      "name": "步行",
+      "factor": 0.0,
+      "unit": "kg CO2/km"
+    },
+    "airplane_short": {
+      "name": "短途飞机(<1000km)",
+      "factor": 0.25,
+      "unit": "kg CO2/km"
+    },
+    "airplane_long": {
+      "name": "长途飞机(>1000km)",
+      "factor": 0.19,
+      "unit": "kg CO2/km"
+    },
+    "taxi": {
+      "name": "出租车",
+      "factor": 0.20,
+      "unit": "kg CO2/km"
+    },
+    "ride_share": {
+      "name": "网约车/拼车",
+      "factor": 0.15,
+      "unit": "kg CO2/km"
+    }
+  },
+  "electricity": {
+    "north_china": {
+      "name": "华北地区",
+      "factor": 0.9041,
+      "unit": "kg CO2/kWh"
+    },
+    "northeast_china": {
+      "name": "东北地区",
+      "factor": 0.8776,
+      "unit": "kg CO2/kWh"
+    },
+    "east_china": {
+      "name": "华东地区",
+      "factor": 0.7035,
+      "unit": "kg CO2/kWh"
+    },
+    "central_china": {
+      "name": "华中地区",
+      "factor": 0.5282,
+      "unit": "kg CO2/kWh"
+    },
+    "south_china": {
+      "name": "华南地区",
+      "factor": 0.5121,
+      "unit": "kg CO2/kWh"
+    },
+    "northwest_china": {
+      "name": "西北地区",
+      "factor": 0.6643,
+      "unit": "kg CO2/kWh"
+    },
+    "southwest_china": {
+      "name": "西南地区",
+      "factor": 0.3771,
+      "unit": "kg CO2/kWh"
+    },
+    "national_average": {
+      "name": "全国平均",
+      "factor": 0.6101,
+      "unit": "kg CO2/kWh"
+    }
+  },
+  "food": {
+    "beef": {
+      "name": "牛肉",
+      "factor": 27.0,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.2
+    },
+    "pork": {
+      "name": "猪肉",
+      "factor": 12.0,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.15
+    },
+    "chicken": {
+      "name": "鸡肉",
+      "factor": 6.9,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.15
+    },
+    "fish": {
+      "name": "鱼肉",
+      "factor": 5.0,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.2
+    },
+    "seafood": {
+      "name": "海鲜",
+      "factor": 8.5,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.2
+    },
+    "egg": {
+      "name": "蛋类",
+      "factor": 4.8,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.05
+    },
+    "dairy": {
+      "name": "奶制品",
+      "factor": 3.2,
+      "unit": "kg CO2/L",
+      "serving_size": 0.25
+    },
+    "rice": {
+      "name": "大米",
+      "factor": 2.7,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.2
+    },
+    "vegetables": {
+      "name": "蔬菜",
+      "factor": 2.0,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.3
+    },
+    "fruits": {
+      "name": "水果",
+      "factor": 1.1,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.2
+    },
+    "bread": {
+      "name": "面包/面食",
+      "factor": 0.75,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.1
+    },
+    "legumes": {
+      "name": "豆制品/豆类",
+      "factor": 2.0,
+      "unit": "kg CO2/kg",
+      "serving_size": 0.1
+    }
+  },
+  "shopping": {
+    "clothing": {
+      "name": "服装",
+      "factor": 15.0,
+      "unit": "kg CO2/件"
+    },
+    "electronics": {
+      "name": "电子产品",
+      "factor": 50.0,
+      "unit": "kg CO2/件"
+    },
+    "furniture": {
+      "name": "家具",
+      "factor": 30.0,
+      "unit": "kg CO2/件"
+    },
+    "books": {
+      "name": "书籍/文具",
+      "factor": 1.0,
+      "unit": "kg CO2/件"
+    },
+    "household": {
+      "name": "日用品",
+      "factor": 5.0,
+      "unit": "kg CO2/件"
+    },
+    "beauty": {
+      "name": "美妆个护",
+      "factor": 3.0,
+      "unit": "kg CO2/件"
+    },
+    "sports": {
+      "name": "运动用品",
+      "factor": 10.0,
+      "unit": "kg CO2/件"
+    },
+    "toys": {
+      "name": "玩具",
+      "factor": 8.0,
+      "unit": "kg CO2/件"
+    },
+    "gifts": {
+      "name": "礼品",
+      "factor": 12.0,
+      "unit": "kg CO2/件"
+    },
+    "digital_service": {
+      "name": "数字服务(订阅等)",
+      "factor": 0.5,
+      "unit": "kg CO2/次"
+    }
+  },
+  "heating": {
+    "natural_gas": {
+      "name": "天然气采暖",
+      "factor": 2.16,
+      "unit": "kg CO2/m³"
+    },
+    "coal": {
+      "name": "煤炭采暖",
+      "factor": 2.42,
+      "unit": "kg CO2/kg"
+    },
+    "electric_heating": {
+      "name": "电采暖",
+      "factor": 0.6101,
+      "unit": "kg CO2/kWh"
+    },
+    "district_heating": {
+      "name": "集中供热",
+      "factor": 0.35,
+      "unit": "kg CO2/kWh"
+    }
+  },
+  "water": {
+    "tap_water": {
+      "name": "自来水",
+      "factor": 0.91,
+      "unit": "kg CO2/吨"
+    }
+  },
+  "waste": {
+    "general_waste": {
+      "name": "一般垃圾(填埋)",
+      "factor": 0.5,
+      "unit": "kg CO2/kg"
+    },
+    "recycled_waste": {
+      "name": "可回收物",
+      "factor": 0.1,
+      "unit": "kg CO2/kg"
+    }
+  },
+  "benchmarks": {
+    "china_daily_per_capita": 17.8,
+    "china_weekly_per_capita": 124.6,
+    "china_monthly_per_capita": 534.0,
+    "china_yearly_per_capita": 6500.0,
+    "global_daily_per_capita": 13.7,
+    "global_weekly_per_capita": 95.9,
+    "global_monthly_per_capita": 411.0,
+    "global_yearly_per_capita": 5000.0,
+    "eu_daily_per_capita": 15.1,
+    "eu_weekly_per_capita": 105.7,
+    "eu_monthly_per_capita": 453.0,
+    "eu_yearly_per_capita": 5500.0
+  }
+}

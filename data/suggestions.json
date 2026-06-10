@@ -1,0 +1,399 @@
+[
+  {
+    "id": "transport_001",
+    "category": "transport",
+    "condition": "high_car_usage",
+    "condition_desc": "每周驾车里程超过200公里",
+    "title": "短途出行改用公共交通或骑行",
+    "description": "将每周50公里的短途驾车改为地铁或公交出行",
+    "saving_estimation": {
+      "base_activity": "car_gasoline",
+      "alternative_activity": "subway",
+      "distance_km": 200,
+      "frequency": "monthly",
+      "saving_kg_co2": 34.0
+    },
+    "difficulty": "easy",
+    "impact": "high",
+    "tips": [
+      "提前规划出行路线，查看实时公交信息",
+      "准备舒适的步行鞋，适合短距离换乘",
+      "可以尝试每周选定1-2天作为无车日"
+    ]
+  },
+  {
+    "id": "transport_002",
+    "category": "transport",
+    "condition": "high_car_usage",
+    "condition_desc": "每周驾车里程超过100公里",
+    "title": "拼车或使用网约车替代独自驾车",
+    "description": "上下班或常走路线尝试拼车，减少单人驾车",
+    "saving_estimation": {
+      "base_activity": "car_gasoline",
+      "alternative_activity": "ride_share",
+      "distance_km": 150,
+      "frequency": "monthly",
+      "saving_kg_co2": 9.0
+    },
+    "difficulty": "easy",
+    "impact": "medium",
+    "tips": [
+      "使用主流拼车APP寻找同路线的通勤伙伴",
+      "与同事协商轮流驾车，分摊成本和碳排放"
+    ]
+  },
+  {
+    "id": "transport_003",
+    "category": "transport",
+    "condition": "frequent_flying",
+    "condition_desc": "每月乘机超过2次",
+    "title": "短途差旅优先选择高铁",
+    "description": "1000公里以内的出行尽量选择高铁替代飞机",
+    "saving_estimation": {
+      "base_activity": "airplane_short",
+      "alternative_activity": "train",
+      "distance_km": 800,
+      "frequency": "monthly",
+      "saving_kg_co2": 176.0
+    },
+    "difficulty": "easy",
+    "impact": "very_high",
+    "tips": [
+      "提前预订高铁票可以获得更好的票价",
+      "利用高铁上的时间处理工作或阅读"
+    ]
+  },
+  {
+    "id": "transport_004",
+    "category": "transport",
+    "condition": "gasoline_car",
+    "condition_desc": "使用汽油车作为主要交通工具",
+    "title": "考虑更换为新能源汽车",
+    "description": "下次换车时优先考虑电动汽车或混合动力汽车",
+    "saving_estimation": {
+      "base_activity": "car_gasoline",
+      "alternative_activity": "car_electric",
+      "distance_km": 1000,
+      "frequency": "monthly",
+      "saving_kg_co2": 160.0
+    },
+    "difficulty": "hard",
+    "impact": "very_high",
+    "tips": [
+      "了解当地新能源汽车购车补贴政策",
+      "考察家中或工作场所充电条件",
+      "可以先尝试共享电动汽车体验"
+    ]
+  },
+  {
+    "id": "electricity_001",
+    "category": "electricity",
+    "condition": "high_electricity",
+    "condition_desc": "月用电量超过300度",
+    "title": "更换LED节能灯泡",
+    "description": "将家中所有传统白炽灯或节能灯更换为LED灯泡",
+    "saving_estimation": {
+      "saving_kwh_per_month": 50,
+      "saving_kg_co2": 30.5
+    },
+    "difficulty": "easy",
+    "impact": "medium",
+    "tips": [
+      "LED灯泡虽然单价较高，但使用寿命更长",
+      "优先更换高频使用的客厅、厨房灯具",
+      "选择暖白光LED，照明效果舒适"
+    ]
+  },
+  {
+    "id": "electricity_002",
+    "category": "electricity",
+    "condition": "high_electricity",
+    "condition_desc": "月用电量超过200度",
+    "title": "养成节能用电习惯",
+    "description": "关闭不必要的电器，合理设置空调温度",
+    "saving_estimation": {
+      "saving_kwh_per_month": 80,
+      "saving_kg_co2": 48.8
+    },
+    "difficulty": "easy",
+    "impact": "high",
+    "tips": [
+      "夏天空调设置在26℃左右，冬天20℃左右",
+      "电器不使用时彻底断电，避免待机耗电",
+      "充分利用自然光，减少白天开灯时间"
+    ]
+  },
+  {
+    "id": "electricity_003",
+    "category": "electricity",
+    "condition": "high_electricity",
+    "condition_desc": "月用电量超过400度",
+    "title": "升级一级能效家电",
+    "description": "更换老旧高耗能家电为一级能效产品",
+    "saving_estimation": {
+      "saving_kwh_per_month": 120,
+      "saving_kg_co2": 73.2
+    },
+    "difficulty": "medium",
+    "impact": "very_high",
+    "tips": [
+      "优先更换使用率最高的空调、冰箱",
+      "关注家电以旧换新政策",
+      "选择变频空调，节能效果更显著"
+    ]
+  },
+  {
+    "id": "food_001",
+    "category": "food",
+    "condition": "high_meat_consumption",
+    "condition_desc": "每周食用牛肉超过2次",
+    "title": "尝试每周一天无肉日",
+    "description": "选定每周一天完全素食，或用鸡肉/豆制品替代牛肉",
+    "saving_estimation": {
+      "base_food": "beef",
+      "alternative_food": "vegetables",
+      "servings_per_week": 2,
+      "saving_kg_co2_monthly": 40.0
+    },
+    "difficulty": "easy",
+    "impact": "very_high",
+    "tips": [
+      "从喜欢的素食菜品开始，如麻婆豆腐、蔬菜沙拉",
+      "尝试素食餐厅，获得更多素食灵感",
+      "用豆制品模拟肉类口感，降低适应难度"
+    ]
+  },
+  {
+    "id": "food_002",
+    "category": "food",
+    "condition": "high_meat_consumption",
+    "condition_desc": "每周食用肉类超过10次",
+    "title": "减少红肉，增加白肉比例",
+    "description": "用鸡肉、鱼肉替代部分猪肉和牛肉",
+    "saving_estimation": {
+      "base_food": "pork",
+      "alternative_food": "chicken",
+      "servings_per_week": 4,
+      "saving_kg_co2_monthly": 14.6
+    },
+    "difficulty": "easy",
+    "impact": "medium",
+    "tips": [
+      "白肉做法多样，烤鸡、蒸鱼都是不错的选择",
+      "逐渐调整肉类比例，不用一步到位",
+      "增加蔬菜配菜比例，肉类自然就减少了"
+    ]
+  },
+  {
+    "id": "food_003",
+    "category": "food",
+    "condition": "general",
+    "condition_desc": "适用于所有用户",
+    "title": "减少食物浪费，光盘行动",
+    "description": "合理规划饮食量，吃多少做多少，减少餐厨垃圾",
+    "saving_estimation": {
+      "waste_reduction_kg_weekly": 2,
+      "saving_kg_co2_monthly": 12.0
+    },
+    "difficulty": "easy",
+    "impact": "medium",
+    "tips": [
+      "买菜前列清单，避免冲动购物",
+      "了解食材保质期，先进先出使用",
+      "剩余饭菜创意改造，变成新菜品"
+    ]
+  },
+  {
+    "id": "food_004",
+    "category": "food",
+    "condition": "high_dairy",
+    "condition_desc": "每周奶制品消费超过5次",
+    "title": "尝试植物奶替代牛奶",
+    "description": "用燕麦奶、豆奶等植物奶替代部分牛奶消费",
+    "saving_estimation": {
+      "base_food": "dairy",
+      "alternative_food": "legumes",
+      "servings_per_week": 3,
+      "saving_kg_co2_monthly": 5.5
+    },
+    "difficulty": "easy",
+    "impact": "low",
+    "tips": [
+      "从咖啡、茶饮中加奶开始尝试",
+      "不同品牌的植物奶口感差异大，多试几款",
+      "自制豆奶/豆浆也是经济实惠的选择"
+    ]
+  },
+  {
+    "id": "shopping_001",
+    "category": "shopping",
+    "condition": "high_shopping",
+    "condition_desc": "每月购物支出超过10件物品",
+    "title": "实践理性消费，减少冲动购买",
+    "description": "购物前等待48小时，确认是否真正需要",
+    "saving_estimation": {
+      "reduced_items_monthly": 5,
+      "average_kg_co2_per_item": 8.0,
+      "saving_kg_co2_monthly": 40.0
+    },
+    "difficulty": "medium",
+    "impact": "high",
+    "tips": [
+      "建立48小时冷静期清单，过两天再看是否还想要",
+      "整理衣柜和房间，了解自己已经拥有什么",
+      "设定月度消费预算，超支自动刹车"
+    ]
+  },
+  {
+    "id": "shopping_002",
+    "category": "shopping",
+    "condition": "high_clothing",
+    "condition_desc": "每月购买服装超过3件",
+    "title": "选择高品质耐用衣物，减少快时尚消费",
+    "description": "少买精买，选择百搭款式，延长衣物使用寿命",
+    "saving_estimation": {
+      "reduced_items_monthly": 2,
+      "saving_kg_co2_monthly": 30.0
+    },
+    "difficulty": "medium",
+    "impact": "high",
+    "tips": [
+      "优先选择天然材质、做工好的衣物",
+      "学习基本的衣物修补和保养技巧",
+      "考虑二手平台购买或出售闲置衣物"
+    ]
+  },
+  {
+    "id": "shopping_003",
+    "category": "shopping",
+    "condition": "high_electronics",
+    "condition_desc": "每年更换电子产品超过2件",
+    "title": "延长电子设备使用寿命",
+    "description": "勤维护、善升级，减少电子产品更新频率",
+    "saving_estimation": {
+      "reduced_items_yearly": 1,
+      "saving_kg_co2_monthly": 4.2
+    },
+    "difficulty": "easy",
+    "impact": "medium",
+    "tips": [
+      "使用保护套和屏幕保护膜，减少物理损坏",
+      "及时清理存储空间和更新系统，保持流畅",
+      "内存/硬盘可升级的设备，优先升级而非换新"
+    ]
+  },
+  {
+    "id": "shopping_004",
+    "category": "shopping",
+    "condition": "general",
+    "condition_desc": "适用于所有用户",
+    "title": "自带购物袋，减少一次性包装",
+    "description": "出门购物自带环保袋，减少使用塑料袋和一次性用品",
+    "saving_estimation": {
+      "reduced_plastic_bags_monthly": 30,
+      "saving_kg_co2_monthly": 3.0
+    },
+    "difficulty": "easy",
+    "impact": "low",
+    "tips": [
+      "在常用的包中常备一个折叠购物袋",
+      "使用可重复使用的保鲜盒打包食物",
+      "自带水杯和餐具，减少一次性用品"
+    ]
+  },
+  {
+    "id": "heating_001",
+    "category": "heating",
+    "condition": "high_heating",
+    "condition_desc": "月采暖能耗超过200单位",
+    "title": "优化采暖温度和时间",
+    "description": "降低采暖温度1-2度，不在家时降低或关闭采暖",
+    "saving_estimation": {
+      "saving_percentage": 0.15,
+      "saving_kg_co2_monthly": 45.0
+    },
+    "difficulty": "easy",
+    "impact": "high",
+    "tips": [
+      "使用智能温控器，按作息自动调整温度",
+      "采暖时关闭门窗，减少热量流失",
+      "添加一层窗帘，可以有效保温"
+    ]
+  },
+  {
+    "id": "heating_002",
+    "category": "heating",
+    "condition": "high_heating",
+    "condition_desc": "使用天然气或煤炭采暖",
+    "title": "改善房屋保温性能",
+    "description": "增加窗户密封、加装保温层，减少采暖需求",
+    "saving_estimation": {
+      "saving_percentage": 0.25,
+      "saving_kg_co2_monthly": 75.0
+    },
+    "difficulty": "medium",
+    "impact": "very_high",
+    "tips": [
+      "窗户缝隙用密封条封堵，成本低效果好",
+      "在窗户上贴保温膜，冬季保暖夏季隔热",
+      "条件允许的话，加装外墙或屋顶保温层"
+    ]
+  },
+  {
+    "id": "water_001",
+    "category": "water",
+    "condition": "general",
+    "condition_desc": "适用于所有用户",
+    "title": "节约用水，减少热水使用",
+    "description": "缩短洗澡时间，修复漏水龙头，用冷水洗衣服",
+    "saving_estimation": {
+      "saving_tons_monthly": 2,
+      "saving_kg_co2_monthly": 5.0
+    },
+    "difficulty": "easy",
+    "impact": "low",
+    "tips": [
+      "淋浴代替泡澡，节水效果显著",
+      "刷牙、洗脸时关闭水龙头",
+      "收集洗菜水、雨水浇花"
+    ]
+  },
+  {
+    "id": "waste_001",
+    "category": "waste",
+    "condition": "general",
+    "condition_desc": "适用于所有用户",
+    "title": "做好垃圾分类和回收",
+    "description": "正确分类投放，可回收物单独收集，减少填埋量",
+    "saving_estimation": {
+      "recycling_increase_percentage": 0.3,
+      "saving_kg_co2_monthly": 6.0
+    },
+    "difficulty": "easy",
+    "impact": "medium",
+    "tips": [
+      "家中设置分类垃圾桶，养成分类习惯",
+      "了解当地垃圾分类规则，准确投放",
+      "快递纸箱、易拉罐等可回收物单独整理出售"
+    ]
+  },
+  {
+    "id": "waste_002",
+    "category": "waste",
+    "condition": "general",
+    "condition_desc": "适用于所有用户",
+    "title": "厨余垃圾堆肥或单独处理",
+    "description": "将厨余垃圾进行堆肥，或投入专用厨余垃圾桶",
+    "saving_estimation": {
+      "composting_kg_weekly": 2,
+      "saving_kg_co2_monthly": 8.0
+    },
+    "difficulty": "medium",
+    "impact": "medium",
+    "tips": [
+      "有阳台的话可以尝试小型堆肥箱",
+      "社区如有厨余垃圾分类收集，务必正确投放",
+      "避免将厨余垃圾与普通垃圾混合"
+    ]
+  }
+]
