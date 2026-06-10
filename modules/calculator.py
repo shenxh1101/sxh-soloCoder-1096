@@ -346,6 +346,239 @@ class CarbonCalculator:
         goals = self.dm.list_goals(user_id, active_only=True)
         return [self.predict_goal_outcome(user_id, g, reference_date, lookback_periods) for g in goals]
 
+    def get_budget_alert(self, user_id: str,
+                         reference_date: date = None,
+                         period: str = 'daily') -> Dict:
+        if reference_date is None:
+            reference_date = date.today()
+
+        goals = self.dm.list_goals(user_id, active_only=True)
+        if not goals:
+            return {'has_alert': False, 'alerts': [], 'budgets': []}
+
+        alerts = []
+        budgets = []
+
+        for goal in goals:
+            goal_type = goal['goal_type']
+            target = goal['target_value']
+            goal_period = goal.get('period', 'monthly')
+
+            if goal_period == 'monthly':
+                month_days = 30
+                daily_budget = target / month_days
+                weekly_budget = daily_budget * 7
+                monthly_budget = target
+
+                monthly_budget = target
+
+            if period == 'daily':
+                current = self.calculate_period_emission(user_id, 'daily', reference_date)
+                if goal_type == 'total_emission':
+                    current_emission = current['total_emission']
+                else:
+                    current_emission = 0
+                    for cat in current['category_breakdown']:
+                        if cat['category'] == goal_type:
+                            current_emission = cat['emission']
+                            break
+
+                budget = daily_budget
+                remaining = daily_budget - current_emission
+                overage = current_emission - daily_budget
+
+                if overage > 0:
+                    severity = 'warning'
+                    if overage > daily_budget * 0.5:
+                        severity = 'critical'
+                    elif overage > daily_budget * 0.2:
+                        severity = 'warning'
+                    else:
+                        severity = 'mild'
+
+                    suggestion = self._get_reduction_suggestion(user_id, goal_type, overage, period)
+
+                    alerts.append({
+                        'goal_id': goal['goal_id'],
+                        'goal_type': goal_type,
+                        'period': period,
+                        'budget': round(daily_budget, 3),
+                        'current': round(current_emission, 2),
+                        'overage': round(overage, 2),
+                        'remaining': round(max(0, remaining), 2),
+                        'severity': severity,
+                        'severity_name': {'mild': '轻微超支', 'warning': '中度超支', 'critical': '严重超支'}[severity],
+                        'suggestion': suggestion
+                    })
+
+                budgets.append({
+                    'goal_id': goal['goal_id'],
+                    'goal_type': goal_type,
+                    'daily_budget': round(daily_budget, 3),
+                    'weekly_budget': round(weekly_budget, 2),
+                    'monthly_budget': round(monthly_budget, 2),
+                    'daily_used': round(current_emission, 2),
+                    'daily_remaining': round(max(0, remaining), 2),
+                    'overage': round(max(0, overage), 2)
+                })
+
+            elif period == 'weekly':
+                current = self.calculate_period_emission(user_id, 'weekly', reference_date)
+                if goal_type == 'total_emission':
+                    current_emission = current['total_emission']
+                else:
+                    current_emission = 0
+                    for cat in current['category_breakdown']:
+                        if cat['category'] == goal_type:
+                            current_emission = cat['emission']
+                            break
+
+                budget = weekly_budget
+                remaining = weekly_budget - current_emission
+                overage = current_emission - weekly_budget
+
+                if overage > 0:
+                    severity = 'warning'
+                    if overage > weekly_budget * 0.5:
+                        severity = 'critical'
+                    elif overage > weekly_budget * 0.2:
+                        severity = 'warning'
+                    else:
+                        severity = 'mild'
+
+                    suggestion = self._get_reduction_suggestion(user_id, goal_type, overage, period)
+
+                    alerts.append({
+                        'goal_id': goal['goal_id'],
+                        'goal_type': goal_type,
+                        'period': period,
+                        'budget': round(weekly_budget, 2),
+                        'current': round(current_emission, 2),
+                        'overage': round(overage, 2),
+                        'remaining': round(max(0, remaining), 2),
+                        'severity': severity,
+                        'severity_name': {'mild': '轻微超支', 'warning': '中度超支', 'critical': '严重超支'}[severity],
+                        'suggestion': suggestion
+                    })
+
+                budgets.append({
+                    'goal_id': goal['goal_id'],
+                    'goal_type': goal_type,
+                    'daily_budget': round(daily_budget, 3),
+                    'weekly_budget': round(weekly_budget, 2),
+                    'monthly_budget': round(monthly_budget, 2),
+                    'weekly_used': round(current_emission, 2),
+                    'weekly_remaining': round(max(0, remaining), 2),
+                    'overage': round(max(0, overage), 2)
+                })
+
+        return {
+            'has_alert': len(alerts) > 0,
+            'alert_count': len(alerts),
+            'alerts': alerts,
+            'budgets': budgets,
+            'reference_date': reference_date.isoformat()
+        }
+
+    def _get_reduction_suggestion(self, user_id: str, goal_type: str,
+                                overage: float, period: str) -> Dict:
+        if goal_type == 'total_emission':
+            result = self.calculate_period_emission(user_id, period)
+            categories = result['category_breakdown']
+            categories.sort(key=lambda x: x['emission'], reverse=True)
+
+            if categories:
+                top_cat = categories[0]
+                reduction_ratio = overage / max(top_cat['emission'], 0.3)
+
+                suggestions_map = {
+                    'transport': {
+                        'action': '减少驾车出行',
+                        'detail': '尝试公共交通或骑行替代1-2次',
+                        'tip': '建议优先从交通类减排，占比最高'
+                    },
+                    'electricity': {
+                        'action': '节约用电',
+                        'detail': '关闭不必要的电器，调高空调温度',
+                        'tip': '建议优先从电力类减排'
+                    },
+                    'food': {
+                        'action': '调整饮食结构',
+                        'detail': '减少红肉换为鸡肉或素食',
+                        'tip': '建议优先从饮食类减排'
+                    },
+                    'shopping': {
+                        'action': '理性消费',
+                        'detail': '减少不必要的购物',
+                        'tip': '建议优先从购物类减排'
+                    }
+                }
+
+                cat_key = top_cat['category']
+                base_suggestion = suggestions_map.get(cat_key, {
+                    'action': '减少高排放活动',
+                    'detail': '减少高排放类活动频次',
+                    'tip': '建议从排放最多的类别入手'
+                })
+
+                return {
+                    'priority_category': cat_key,
+                    'priority_category_name': top_cat['category_name'],
+                    'category_emission': top_cat['emission'],
+                    'suggested_reduction_ratio': round(reduction_ratio * 100, 1),
+                    **base_suggestion
+                }
+
+        return {
+            'priority_category': goal_type,
+            'priority_category_name': self.CATEGORY_NAMES.get(goal_type, goal_type),
+            'action': '减少相关活动',
+            'detail': '适当减少该类活动的频次或数量',
+            'tip': '建议从当前类别入手减排'
+        }
+
+    def get_dashboard_budget_summary(self, user_id: str) -> Dict:
+        daily_alert = self.get_budget_alert(user_id, period='daily')
+        weekly_alert = self.get_budget_alert(user_id, period='weekly')
+
+        daily_over = False
+        weekly_over = False
+
+        daily_budget_info = {}
+        weekly_budget_info = {}
+
+        if daily_alert['budgets']:
+            total_daily = [b for b in daily_alert['budgets'] if b['goal_type'] == 'total_emission']
+            if total_daily:
+                daily_budget_info = total_daily[0]
+                daily_over = total_daily[0].get('overage', 0) > 0
+
+        if weekly_alert['budgets']:
+            total_weekly = [b for b in weekly_alert['budgets'] if b['goal_type'] == 'total_emission']
+            if total_weekly:
+                weekly_budget_info = total_weekly[0]
+                weekly_over = total_weekly[0].get('overage', 0) > 0
+
+        return {
+            'daily': {
+                'budget': daily_budget_info.get('daily_budget', 0),
+                'used': daily_budget_info.get('daily_used', 0),
+                'remaining': daily_budget_info.get('daily_remaining', 0),
+                'overage': daily_budget_info.get('overage', 0),
+                'is_over': daily_over
+            },
+            'weekly': {
+                'budget': weekly_budget_info.get('weekly_budget', 0),
+                'used': weekly_budget_info.get('weekly_used', 0),
+                'remaining': weekly_budget_info.get('weekly_remaining', 0),
+                'overage': weekly_budget_info.get('overage', 0),
+                'is_over': weekly_over
+            },
+            'daily_alerts': daily_alert.get('alerts', []),
+            'weekly_alerts': weekly_alert.get('alerts', []),
+            'has_alert': daily_over or weekly_over
+        }
+
     def get_user_summary(self, user_id: str) -> Dict:
         user = self.dm.get_user(user_id)
         if not user:

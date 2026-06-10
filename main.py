@@ -534,15 +534,22 @@ class CarbonTrackerCLI:
                     type_name = self._get_type_name(t['category'], t['activity_type'])
                     period_names = {'on_demand': '按需', 'daily': '每日', 'weekly': '每周', 'monthly': '每月'}
                     period = period_names.get(t.get('period', 'on_demand'), t.get('period', ''))
-                    print(f"  [{t['template_id']}] {t['name']}")
-                    print(f"      {cat_name} - {type_name} | 默认: {t['default_amount']} | [{period}]")
+                    status = t.get('status', 'active')
+                    status_icon = '🔵' if status == 'active' else '⏸️'
+                    status_name = '运行中' if status == 'active' else '已暂停'
+                    print(f"  [{t['template_id']}] {t['name']} {status_icon}")
+                    print(f"      {cat_name} - {type_name} | 默认: {t['default_amount']} | [{period}] | {status_name}")
                     if t.get('last_used_at'):
                         print(f"      已使用 {t.get('usage_count', 0)} 次 | 上次: {t['last_used_at'][:10]}")
                 print("  " + "─" * 70)
 
             print("\n  [1] 创建新模板")
-            print("  [2] 修改模板")
-            print("  [3] 删除模板")
+            print("  [2] 查看计划表 (未来30天)")
+            print("  [3] 修改模板")
+            print("  [4] 暂停/恢复模板")
+            print("  [5] 跳过某次活动")
+            print("  [6] 生成本周期记录")
+            print("  [7] 删除模板")
             print("  [0] 返回")
 
             choice = input("\n  请选择操作: ").strip()
@@ -550,8 +557,16 @@ class CarbonTrackerCLI:
             if choice == '1':
                 self._create_template_wizard(user_id)
             elif choice == '2':
-                self._update_template_wizard(user_id, templates)
+                self._show_schedule_view(user_id)
             elif choice == '3':
+                self._update_template_wizard(user_id, templates)
+            elif choice == '4':
+                self._toggle_template_status(user_id, templates)
+            elif choice == '5':
+                self._skip_template_date_wizard(user_id, templates)
+            elif choice == '6':
+                self._generate_scheduled_activities_wizard(user_id)
+            elif choice == '7':
                 self._delete_template_wizard(user_id, templates)
             elif choice == '0':
                 return
@@ -725,6 +740,147 @@ class CarbonTrackerCLI:
             else:
                 print("\n  ❌ 删除失败")
 
+    def _show_schedule_view(self, user_id):
+        print(f"\n  📅 计划表预览 (未来30天)")
+        print("  " + "─" * 70)
+
+        schedule = self.dm.get_schedule_preview(user_id)
+        if not schedule:
+            print("\n  📭 暂无计划中的活动，请先创建周期模板")
+            return
+
+        from datetime import date
+        today = date.today()
+        total_planned = 0
+        total_generated = 0
+        total_emission = 0
+        region = self.current_user.get('region', 'national_average')
+
+        current_date = None
+        for item in schedule:
+            item_date = item['date']
+            if item_date != current_date:
+                current_date = item_date
+                d = date.fromisoformat(item_date)
+                weekday = d.strftime('%A')
+                weekday_cn = {'Monday': '周一', 'Tuesday': '周二', 'Wednesday': '周三',
+                              'Thursday': '周四', 'Friday': '周五', 'Saturday': '周六',
+                              'Sunday': '周日'}
+                is_today = d == today
+                prefix = "📍 " if is_today else "  "
+                print(f"\n{prefix}{item_date} ({weekday_cn.get(weekday, weekday)})")
+
+            if item['status'] == 'generated':
+                status_icon = '✅'
+                total_generated += 1
+            else:
+                status_icon = '⏳'
+                total_planned += 1
+
+            act = item.get('activity')
+            emission = 0
+            if act:
+                emission = self.calc.calculate_activity_emission(act, region)
+            else:
+                temp_act = {
+                    'category': item['category'],
+                    'activity_type': item['activity_type'],
+                    'amount': item['amount']
+                }
+                emission = self.calc.calculate_activity_emission(temp_act, region)
+            total_emission += emission
+
+            print(f"     {status_icon} {item['template_name']}: "
+                  f"{item['amount']} → {emission:.2f} kg CO₂")
+
+        print("\n  " + "─" * 70)
+        print(f"  📊 统计:")
+        print(f"     已生成: {total_generated} 条")
+        print(f"     待生成: {total_planned} 条")
+        print(f"     预计总排放: {total_emission:.2f} kg CO₂")
+
+    def _toggle_template_status(self, user_id, templates):
+        if not templates:
+            print("\n  📭 暂无模板")
+            return
+
+        def display_template(t):
+            category_names = self.calc.CATEGORY_NAMES
+            cat_name = category_names.get(t['category'], t['category'])
+            type_name = self._get_type_name(t['category'], t['activity_type'])
+            status = '运行中' if t.get('status', 'active') == 'active' else '已暂停'
+            return f"{t['name']} [{status}] ({cat_name} - {type_name})"
+
+        selected = self.select_from_list(templates, "选择要切换状态的模板",
+                                          display_func=display_template)
+        if not selected:
+            return
+
+        if selected.get('status', 'active') == 'active':
+            if self.dm.pause_template(user_id, selected['template_id']):
+                print(f"\n  ⏸️  模板「{selected['name']}」已暂停")
+        else:
+            if self.dm.resume_template(user_id, selected['template_id']):
+                print(f"\n  ▶️  模板「{selected['name']}」已恢复运行")
+
+    def _skip_template_date_wizard(self, user_id, templates):
+        if not templates:
+            print("\n  📭 暂无模板")
+            return
+
+        def display_template(t):
+            category_names = self.calc.CATEGORY_NAMES
+            cat_name = category_names.get(t['category'], t['category'])
+            type_name = self._get_type_name(t['category'], t['activity_type'])
+            return f"{t['name']} ({cat_name} - {type_name})"
+
+        selected = self.select_from_list(templates, "选择要跳过的活动模板",
+                                          display_func=display_template)
+        if not selected:
+            return
+
+        default_date = date.today().isoformat()
+        skip_date = self.input_prompt("  要跳过的日期 (YYYY-MM-DD)",
+                                       default=default_date,
+                                       validator=lambda x: self._validate_date(x))
+        if not skip_date:
+            return
+
+        if self.dm.skip_template_date(user_id, selected['template_id'], skip_date):
+            print(f"\n  ⏭️  已跳过 {skip_date} 的「{selected['name']}」活动")
+
+    def _generate_scheduled_activities_wizard(self, user_id):
+        print(f"\n  ⚙️  生成计划活动")
+        print("  " + "─" * 50)
+
+        start_date = self.input_prompt("  开始日期 (YYYY-MM-DD, 回车=今天)",
+                                        default=date.today().isoformat(),
+                                        validator=lambda x: self._validate_date(x))
+        if not start_date:
+            return
+
+        default_end = (date.today() + timedelta(days=7)).isoformat()
+        end_date = self.input_prompt("  结束日期 (YYYY-MM-DD, 回车=7天后)",
+                                      default=default_end,
+                                      validator=lambda x: self._validate_date(x))
+        if not end_date:
+            return
+
+        if not self.confirm_prompt(f"  确认生成 {start_date} 到 {end_date} 的所有计划活动?",
+                                     default=False):
+            return
+
+        generated = self.dm.generate_scheduled_activities(user_id, start_date, end_date)
+        if generated:
+            region = self.current_user.get('region', 'national_average')
+            total_emission = sum(
+                self.calc.calculate_activity_emission(act, region) for act in generated
+            )
+            print(f"\n  ✅ 已生成 {len(generated)} 条活动记录!")
+            print(f"     总排放: {total_emission:.2f} kg CO₂")
+        else:
+            print(f"\n  ℹ️  没有新的活动需要生成 (可能已经生成过了)")
+
     def view_activity_history(self):
         user_id = self.current_user['user_id']
         print(f"\n  📜 活动记录历史")
@@ -868,11 +1024,70 @@ class CarbonTrackerCLI:
             print(f"  ❌ 文件不存在: {file_path}")
             return
 
-        print(f"\n  正在导入 {file_path} ...")
+        region = self.current_user.get('region', 'national_average')
+
+        print(f"\n  🔍 正在预览 {file_path} ...")
+        preview = self.importer.preview_csv(file_path, template_key, region=region)
+
+        if not preview.get('valid', False) and preview.get('error'):
+            print(f"\n  ❌ 文件读取失败: {preview['error']}")
+            return
+
+        print(f"\n  {'═' * 60}")
+        print(f"  📊 导入预览")
+        print(f"  {'═' * 60}")
+        print(f"  模板类型: {preview.get('template', '自动检测')}")
+        print(f"  总行数: {preview.get('total_rows', 0)}")
+        print(f"  {'─' * 60}")
+        print(f"  ✅ 有效: {preview.get('valid_rows', 0)} 条")
+        print(f"  ⚠️  跳过: {preview.get('skipped_rows', 0)} 条")
+        print(f"  ❌ 失败: {preview.get('invalid_rows', 0)} 条")
+        print(f"  💰 预计新增排放: {preview.get('estimated_emission', 0):.2f} kg CO₂")
+        print(f"  {'─' * 60}")
+
+        if preview.get('valid_details'):
+            print(f"\n  ✅ 有效数据明细 (前10条):")
+            for item in preview['valid_details'][:10]:
+                print(f"     - [行{item['row']}] {item['date']} "
+                      f"{item['category_name']} - {item['type_name']}: "
+                      f"{item['amount']} → {item['emission']:.2f} kg CO₂")
+            if len(preview['valid_details']) > 10:
+                print(f"     ... 还有 {len(preview['valid_details']) - 10} 条")
+
+        if preview.get('invalid_details'):
+            print(f"\n  ❌ 失败数据明细:")
+            for item in preview['invalid_details'][:10]:
+                print(f"     - [行{item['row']}] {item['reason']}")
+            if len(preview['invalid_details']) > 10:
+                print(f"     ... 还有 {len(preview['invalid_details']) - 10} 条")
+
+            if self.confirm_prompt("\n  是否导出失败行以便修正?", default=True):
+                failed_path = self.input_prompt("  失败行导出路径",
+                                                 default="import_failed_rows.csv")
+                if failed_path:
+                    fieldnames = preview.get('fieldnames', [])
+                    if self.importer.export_failed_rows(failed_path,
+                                                         preview['invalid_details'],
+                                                         fieldnames):
+                        print(f"\n  ✅ 失败行已导出: {os.path.abspath(failed_path)}")
+                        print("     您可以修正后重新导入")
+                    else:
+                        print(f"\n  ⚠️  导出失败")
+
+        if preview.get('valid_rows', 0) == 0:
+            print("\n  ⚠️  没有可导入的有效数据")
+            return
+
+        if not self.confirm_prompt(f"\n  确认导入 {preview['valid_rows']} 条记录?",
+                                     default=True):
+            print("\n  ℹ️  已取消导入")
+            return
+
+        print(f"\n  📥 正在导入...")
         added_count, added, errors, summary = self.importer.import_csv(user_id, file_path, template_key)
 
         print(f"\n  {'═' * 60}")
-        print(f"  📊 导入结果摘要")
+        print(f"  📊 导入结果")
         print(f"  {'═' * 60}")
         print(f"  模板类型: {summary.get('template', '自动检测')}")
         print(f"  总行数: {summary.get('total_rows', 0)}")
@@ -883,8 +1098,8 @@ class CarbonTrackerCLI:
         print(f"  {'─' * 60}")
 
         if summary.get('success_details'):
-            print(f"\n  ✅ 成功导入明细 (前{len(summary['success_details'])}条):")
-            for item in summary['success_details']:
+            print(f"\n  ✅ 成功导入明细 (前10条):")
+            for item in summary['success_details'][:10]:
                 region = self.current_user.get('region', 'national_average')
                 emission = 0
                 if 'activity' in item:
@@ -892,11 +1107,6 @@ class CarbonTrackerCLI:
                 print(f"     - [{item.get('row', '?')}] {item.get('date', '')} "
                       f"{item.get('category_name', '')} - {item.get('type_name', '')}: "
                       f"{item.get('amount', 0)} → {emission:.2f} kg CO₂")
-
-        if summary.get('skipped_details'):
-            print(f"\n  ⚠️  跳过明细:")
-            for item in summary['skipped_details']:
-                print(f"     - [行{item.get('row', '?')}] {item.get('reason', '')}")
 
         if summary.get('failed_details'):
             print(f"\n  ❌ 失败明细:")
@@ -1022,6 +1232,41 @@ class CarbonTrackerCLI:
                     goal_type_name, goal['current'], goal['target'],
                     unit='kg', width=55
                 ))
+
+        budget_summary = self.calc.get_dashboard_budget_summary(user_id)
+        if budget_summary.get('has_alert'):
+            print(self.viz.section('⚠️  预算超支提醒'))
+
+            daily = budget_summary.get('daily', {})
+            weekly = budget_summary.get('weekly', {})
+
+            if daily.get('is_over'):
+                print(f'''
+  ┌{'─' * 66}┐
+  │  🔥 今日已超支!                                                    │
+  │     今日排放: {daily.get('used', 0):>6.1f} kg / 预算: {daily.get('budget', 0):>6.2f} kg        │
+  │     超支: +{daily.get('overage', 0):.2f} kg                                           │
+  └{'─' * 66}┘
+                ''')
+
+            if weekly.get('is_over'):
+                print(f'''
+  ┌{'─' * 66}┐
+  │  🔥 本周已超支!                                                    │
+  │     本周排放: {weekly.get('used', 0):>6.1f} kg / 预算: {weekly.get('budget', 0):>6.2f} kg        │
+  │     超支: +{weekly.get('overage', 0):.2f} kg                                           │
+  └{'─' * 66}┘
+                ''')
+
+            if budget_summary.get('daily_alerts'):
+                for alert in budget_summary['daily_alerts']:
+                    sug = alert.get('suggestion', {})
+                    print(f'''
+  💡 建议: {sug.get('action', '减少高排放活动')}
+     {sug.get('detail', '')}
+     {sug.get('tip', '')}
+                    ''')
+                    break
 
         suggestions = self.suggester.get_suggestions(user_id, count=3)
         if suggestions:

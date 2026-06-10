@@ -207,6 +207,181 @@ class DataImporter:
                 {'category': '购物', 'activity_type': 'clothing', 'activity_date': today, 'amount': '1', 'notes': '购买T恤1件'}
             ]
 
+    def preview_csv(self, file_path: str, template_key: str = None,
+                    encoding: str = 'utf-8-sig',
+                    region: str = 'national_average') -> Dict:
+        template_name = '自动检测'
+        if template_key and template_key in self.TEMPLATES:
+            template_name = self.TEMPLATES[template_key]['name']
+
+        if not os.path.exists(file_path):
+            return {
+                'valid': False,
+                'error': f'文件不存在: {file_path}',
+                'total_rows': 0,
+                'valid_rows': 0,
+                'invalid_rows': 0,
+                'skipped_rows': 0,
+                'estimated_emission': 0,
+                'template': template_name,
+                'valid_details': [],
+                'invalid_details': [],
+                'skipped_details': [],
+                'raw_rows': []
+            }
+
+        template = None
+        if template_key and template_key in self.TEMPLATES:
+            template = self.TEMPLATES[template_key]
+
+        try:
+            with open(file_path, 'r', encoding=encoding, newline='') as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+                fieldnames = reader.fieldnames or []
+        except UnicodeDecodeError:
+            try:
+                with open(file_path, 'r', encoding='gbk', newline='') as f:
+                    reader = csv.DictReader(f)
+                    rows = list(reader)
+                    fieldnames = reader.fieldnames or []
+            except Exception as e:
+                return {
+                    'valid': False,
+                    'error': f'文件编码不支持: {e}',
+                    'total_rows': 0,
+                    'valid_rows': 0,
+                    'invalid_rows': 0,
+                    'skipped_rows': 0,
+                    'estimated_emission': 0,
+                    'template': template_name,
+                    'valid_details': [],
+                    'invalid_details': [{'row': 0, 'reason': str(e)}],
+                    'skipped_details': [],
+                    'raw_rows': []
+                }
+        except Exception as e:
+            return {
+                'valid': False,
+                'error': f'读取文件失败: {e}',
+                'total_rows': 0,
+                'valid_rows': 0,
+                'invalid_rows': 0,
+                'skipped_rows': 0,
+                'estimated_emission': 0,
+                'template': template_name,
+                'valid_details': [],
+                'invalid_details': [{'row': 0, 'reason': str(e)}],
+                'skipped_details': [],
+                'raw_rows': []
+            }
+
+        if not rows:
+            return {
+                'valid': True,
+                'error': None,
+                'total_rows': 0,
+                'valid_rows': 0,
+                'invalid_rows': 0,
+                'skipped_rows': 0,
+                'estimated_emission': 0,
+                'template': template_name,
+                'valid_details': [],
+                'invalid_details': [],
+                'skipped_details': [],
+                'raw_rows': []
+            }
+
+        category_names = {
+            'transport': '交通', 'electricity': '电力', 'food': '饮食',
+            'shopping': '购物', 'heating': '采暖', 'water': '用水',
+            'waste': '废弃物'
+        }
+
+        valid_details = []
+        invalid_details = []
+        skipped_details = []
+        valid_rows_data = []
+        total_emission = 0.0
+
+        for row_idx, row in enumerate(rows, start=2):
+            try:
+                activity = self._parse_row(row, template, row_idx)
+                if activity:
+                    emission = self._calc_activity_emission(activity, region)
+                    total_emission += emission
+                    cat = activity.get('category', '')
+                    act_type = activity.get('activity_type', '')
+                    act_type_name = self._get_activity_type_name(cat, act_type)
+                    cat_name = category_names.get(cat, cat)
+                    valid_details.append({
+                        'row': row_idx,
+                        'date': activity.get('activity_date', ''),
+                        'category': cat,
+                        'category_name': cat_name,
+                        'activity_type': act_type,
+                        'type_name': act_type_name,
+                        'amount': activity.get('amount', 0),
+                        'emission': round(emission, 2),
+                        'notes': activity.get('notes', ''),
+                        'activity': activity
+                    })
+                    valid_rows_data.append(activity)
+                else:
+                    skipped_details.append({'row': row_idx, 'reason': '数据为空或跳过',
+                                            'row_data': dict(row)})
+            except ValueError as e:
+                invalid_details.append({'row': row_idx, 'reason': str(e),
+                                        'row_data': dict(row)})
+
+        return {
+            'valid': True,
+            'error': None,
+            'total_rows': len(rows),
+            'valid_rows': len(valid_details),
+            'invalid_rows': len(invalid_details),
+            'skipped_rows': len(skipped_details),
+            'estimated_emission': round(total_emission, 2),
+            'template': template_name,
+            'fieldnames': fieldnames,
+            'valid_details': valid_details,
+            'invalid_details': invalid_details,
+            'skipped_details': skipped_details,
+            'valid_activities': valid_rows_data,
+            'raw_rows': rows
+        }
+
+    def export_failed_rows(self, file_path: str, invalid_details: List[Dict],
+                           fieldnames: List[str] = None) -> bool:
+        if not invalid_details:
+            return False
+
+        try:
+            if fieldnames is None:
+                fieldnames = ['row', 'reason']
+                if invalid_details and 'row_data' in invalid_details[0]:
+                    sample_row = invalid_details[0].get('row_data', {})
+                    fieldnames = list(sample_row.keys()) + ['导入失败原因']
+            else:
+                fieldnames = list(fieldnames) + ['导入失败原因']
+
+            with open(file_path, 'w', encoding='utf-8-sig', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                for item in invalid_details:
+                    row_data = dict(item.get('row_data', {}))
+                    row_data['导入失败原因'] = item.get('reason', '')
+                    writer.writerow(row_data)
+            return True
+        except Exception as e:
+            print(f"导出失败行错误: {e}")
+            return False
+
+    def _calc_activity_emission(self, activity: Dict, region: str) -> float:
+        from modules.calculator import CarbonCalculator
+        calc = CarbonCalculator(self.dm)
+        return calc.calculate_activity_emission(activity, region)
+
     def import_csv(self, user_id: str, file_path: str,
                    template_key: str = None,
                    encoding: str = 'utf-8-sig') -> Tuple[int, List[Dict], List[str], Dict]:

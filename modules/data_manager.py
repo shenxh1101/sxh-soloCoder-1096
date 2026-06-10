@@ -104,7 +104,7 @@ class DataManager:
 
     def add_activity(self, user_id: str, category: str, activity_type: str,
                      amount: float, activity_date: str = None,
-                     notes: str = '') -> Optional[Dict]:
+                     notes: str = '', template_id: str = None) -> Optional[Dict]:
         user_data = self.get_user(user_id)
         if user_data is None:
             return None
@@ -122,9 +122,21 @@ class DataManager:
             'notes': notes,
             'created_at': datetime.now().isoformat()
         }
+        if template_id:
+            activity['template_id'] = template_id
         user_data['activities'].append(activity)
         self._save_user_data(user_id, user_data)
         return activity
+
+    def get_activity(self, user_id: str, activity_id: str) -> Optional[Dict]:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return None
+
+        for act in user_data.get('activities', []):
+            if act['activity_id'] == activity_id:
+                return act
+        return None
 
     def list_activities(self, user_id: str, start_date: str = None,
                         end_date: str = None, category: str = None,
@@ -178,6 +190,8 @@ class DataManager:
                 'notes': act.get('notes', ''),
                 'created_at': datetime.now().isoformat()
             }
+            if act.get('template_id'):
+                activity['template_id'] = act['template_id']
             user_data['activities'].append(activity)
             added.append(activity)
 
@@ -186,7 +200,8 @@ class DataManager:
 
     def create_template(self, user_id: str, name: str, category: str,
                         activity_type: str, default_amount: float,
-                        default_notes: str = '', period: str = 'on_demand') -> Optional[Dict]:
+                        default_notes: str = '', period: str = 'on_demand',
+                        status: str = 'active') -> Optional[Dict]:
         user_data = self.get_user(user_id)
         if user_data is None:
             return None
@@ -205,9 +220,12 @@ class DataManager:
             'default_amount': default_amount,
             'default_notes': default_notes,
             'period': period,
+            'status': status,
+            'skip_dates': [],
             'created_at': datetime.now().isoformat(),
             'last_used_at': None,
-            'usage_count': 0
+            'usage_count': 0,
+            'generated_record_ids': []
         }
         user_data['templates'].append(template)
         self._save_user_data(user_id, user_data)
@@ -325,6 +343,187 @@ class DataManager:
             self._save_user_data(user_id, user_data)
             return True
         return False
+
+    def pause_template(self, user_id: str, template_id: str) -> bool:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return False
+
+        for t in user_data.get('templates', []):
+            if t['template_id'] == template_id:
+                t['status'] = 'paused'
+                self._save_user_data(user_id, user_data)
+                return True
+        return False
+
+    def resume_template(self, user_id: str, template_id: str) -> bool:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return False
+
+        for t in user_data.get('templates', []):
+            if t['template_id'] == template_id:
+                t['status'] = 'active'
+                self._save_user_data(user_id, user_data)
+                return True
+        return False
+
+    def skip_template_date(self, user_id: str, template_id: str,
+                           skip_date: str) -> bool:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return False
+
+        for t in user_data.get('templates', []):
+            if t['template_id'] == template_id:
+                if 'skip_dates' not in t:
+                    t['skip_dates'] = []
+                if skip_date not in t['skip_dates']:
+                    t['skip_dates'].append(skip_date)
+                    t['skip_dates'].sort()
+                self._save_user_data(user_id, user_data)
+                return True
+        return False
+
+    def unskip_template_date(self, user_id: str, template_id: str,
+                              skip_date: str) -> bool:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return False
+
+        for t in user_data.get('templates', []):
+            if t['template_id'] == template_id:
+                if skip_date in t.get('skip_dates', []):
+                    t['skip_dates'].remove(skip_date)
+                self._save_user_data(user_id, user_data)
+                return True
+        return False
+
+    def get_schedule_preview(self, user_id: str, start_date: str = None,
+                              end_date: str = None) -> List[Dict]:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return []
+
+        if start_date is None:
+            start_date = date.today().isoformat()
+        if end_date is None:
+            end_dt = date.today() + timedelta(days=30)
+            end_date = end_dt.isoformat()
+
+        start_dt = date.fromisoformat(start_date)
+        end_dt = date.fromisoformat(end_date)
+        days = (end_dt - start_dt).days + 1
+
+        schedule = []
+        templates = [t for t in user_data.get('templates', [])
+                     if t.get('status', 'active') == 'active'
+                     and t.get('period', 'on_demand') in ['daily', 'weekly', 'monthly']]
+
+        for template in templates:
+            period = template['period']
+            skip_dates = template.get('skip_dates', [])
+
+            for i in range(days):
+                d = start_dt + timedelta(days=i)
+                d_str = d.isoformat()
+
+                if d_str in skip_dates:
+                    continue
+
+                should_generate = False
+                if period == 'daily':
+                    should_generate = True
+                elif period == 'weekly':
+                    should_generate = True
+                elif period == 'monthly':
+                    if d.day == 1:
+                        should_generate = True
+
+                if should_generate:
+                    existing = self._find_activity_by_date(user_id, template['template_id'], d_str)
+                    schedule.append({
+                        'date': d_str,
+                        'template_id': template['template_id'],
+                        'template_name': template['name'],
+                        'category': template['category'],
+                        'activity_type': template['activity_type'],
+                        'amount': template['default_amount'],
+                        'notes': template.get('default_notes', ''),
+                        'period': period,
+                        'status': 'generated' if existing else 'planned',
+                        'activity_id': existing['activity_id'] if existing else None
+                    })
+
+        schedule.sort(key=lambda x: (x['date'], x['template_name']))
+        return schedule
+
+    def _find_activity_by_date(self, user_id: str, template_id: str,
+                                activity_date: str) -> Optional[Dict]:
+        activities = self.list_activities(user_id, start_date=activity_date,
+                                           end_date=activity_date)
+        for act in activities:
+            if act.get('template_id') == template_id:
+                return act
+        return None
+
+    def generate_scheduled_activities(self, user_id: str,
+                                       start_date: str = None,
+                                       end_date: str = None) -> List[Dict]:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return []
+
+        schedule = self.get_schedule_preview(user_id, start_date, end_date)
+        generated = []
+
+        for item in schedule:
+            if item['status'] == 'planned':
+                activity = self.add_activity(
+                    user_id,
+                    category=item['category'],
+                    activity_type=item['activity_type'],
+                    amount=item['amount'],
+                    activity_date=item['date'],
+                    notes=item['notes'] + f' [计划生成:{item["template_name"]}]',
+                    template_id=item['template_id']
+                )
+                if activity:
+                    generated.append(activity)
+
+        if generated:
+            user_data = self.get_user(user_id)
+            for item in schedule:
+                if item['status'] == 'planned':
+                    for t in user_data.get('templates', []):
+                        if t['template_id'] == item['template_id']:
+                            if 'generated_record_ids' not in t:
+                                t['generated_record_ids'] = []
+                            for act in generated:
+                                if act.get('template_id') == item['template_id'] \
+                                   and act['activity_date'] == item['date']:
+                                    if act['activity_id'] not in t['generated_record_ids']:
+                                        t['generated_record_ids'].append(act['activity_id'])
+                            t['usage_count'] = t.get('usage_count', 0) + 1
+                            t['last_used_at'] = datetime.now().isoformat()
+                            break
+            self._save_user_data(user_id, user_data)
+
+        return generated
+
+    def get_template_generated_activities(self, user_id: str,
+                                            template_id: str) -> List[Dict]:
+        template = self.get_template(user_id, template_id)
+        if not template:
+            return []
+
+        record_ids = template.get('generated_record_ids', [])
+        activities = []
+        for aid in record_ids:
+            act = self.get_activity(user_id, aid)
+            if act:
+                activities.append(act)
+        return activities
 
     def _validate_category(self, category: str) -> bool:
         return category in self.get_categories()
