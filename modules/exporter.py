@@ -529,16 +529,33 @@ class ReportExporter:
             '''
 
             for goal in goals_progress:
-                pct = max(0, min(100, goal['progress_percent']))
-                if pct >= 100:
+                achieved = goal.get('achieved', False)
+                current = goal['current']
+                target = goal['target']
+                overage = goal.get('overage', 0)
+
+                if achieved:
                     bar_cls = 'good'
-                    status = '✅ 已达标'
-                elif pct >= 60:
+                    if target > 0:
+                        remaining_pct = ((target - current) / target) * 100
+                        status = f'✅ 已达标 (还剩 {goal.get("remaining", 0):.1f} kg 额度)'
+                        bar_pct = min(100, remaining_pct)
+                    else:
+                        status = '✅ 已达标'
+                        bar_pct = 100
+                elif overage <= target * 0.1:
                     bar_cls = 'warn'
-                    status = '⏳ 进行中'
+                    over_pct = min(20, (overage / target) * 100)
+                    status = f'⚠️ 轻微超标 (+{overage:.1f} kg)'
+                    bar_pct = 100 + over_pct
                 else:
                     bar_cls = 'bad'
-                    status = '⚠️ 需努力'
+                    over_pct = min(30, (overage / target) * 100)
+                    status = f'❌ 严重超标 (+{overage:.1f} kg)'
+                    bar_pct = 100 + over_pct
+
+                pct = max(10, min(130, bar_pct))
+                display_pct = max(0, min(100, goal['progress_percent']))
 
                 goal_type_name = {
                     'total_emission': '总排放',
@@ -556,7 +573,7 @@ class ReportExporter:
                                 <div class="goal-bar-bg">
                                     <div class="goal-bar-fill {bar_cls}" style="width:{pct:.0f}%"></div>
                                 </div>
-                                <span style="font-size:13px;font-weight:600;width:50px">{pct:.0f}%</span>
+                                <span style="font-size:13px;font-weight:600;width:50px">{display_pct:.0f}%</span>
                             </div>
                         </td>
                         <td>{goal['current']:.1f} / {goal['target']:.1f} kg</td>

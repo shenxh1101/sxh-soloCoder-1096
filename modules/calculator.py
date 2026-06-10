@@ -233,6 +233,119 @@ class CarbonCalculator:
         goals = self.dm.list_goals(user_id, active_only=True)
         return [self.check_goal_progress(user_id, g, reference_date) for g in goals]
 
+    def predict_goal_outcome(self, user_id: str, goal: Dict,
+                              reference_date: date = None,
+                              lookback_periods: int = 4) -> Dict:
+        if reference_date is None:
+            reference_date = date.today()
+
+        goal_type = goal['goal_type']
+        period = goal.get('period', 'monthly')
+        target = goal['target_value']
+
+        start_date, end_date = self.dm.get_date_range(period, reference_date)
+        start_dt = date.fromisoformat(start_date)
+        end_dt = date.fromisoformat(end_date)
+        days_total = (end_dt - start_dt).days + 1
+        days_passed = (reference_date - start_dt).days + 1
+        days_remaining = days_total - days_passed
+        if days_remaining < 0:
+            days_remaining = 0
+
+        current_result = self.calculate_period_emission(user_id, period, reference_date)
+
+        if goal_type == 'total_emission':
+            current = current_result['total_emission']
+        else:
+            current = 0
+            for cat in current_result['category_breakdown']:
+                if cat['category'] == goal_type:
+                    current = cat['emission']
+                    break
+
+        historical_averages = []
+        for i in range(1, lookback_periods + 1):
+            if period == 'monthly':
+                month = reference_date.month - i
+                year = reference_date.year
+                while month <= 0:
+                    month += 12
+                    year -= 1
+                ref = reference_date.replace(year=year, month=month, day=1)
+            elif period == 'weekly':
+                ref = reference_date - timedelta(weeks=i)
+            else:
+                ref = reference_date - timedelta(days=i)
+
+            hist_result = self.calculate_period_emission(user_id, period, ref)
+            if goal_type == 'total_emission':
+                hist_emission = hist_result['total_emission']
+            else:
+                hist_emission = 0
+                for cat in hist_result['category_breakdown']:
+                    if cat['category'] == goal_type:
+                        hist_emission = cat['emission']
+                        break
+            if hist_emission > 0:
+                historical_averages.append(hist_emission)
+
+        if historical_averages:
+            avg_daily = sum(historical_averages) / len(historical_averages) / days_total
+        else:
+            avg_daily = current / max(days_passed, 1)
+
+        projected_total = current + (avg_daily * days_remaining)
+        projected_over = max(0, projected_total - target)
+        projected_under = max(0, target - projected_total)
+
+        if projected_under > 0:
+            will_achieve = True
+            risk_level = 'low'
+            risk_desc = '✓ 预计可顺利达标'
+        elif projected_over <= target * 0.1:
+            will_achieve = False
+            risk_level = 'medium'
+            risk_desc = '⚠️ 有小幅超标风险，需稍加注意'
+        elif projected_over <= target * 0.3:
+            will_achieve = False
+            risk_level = 'high'
+            risk_desc = '⚠️ 有较大超标风险，需要采取减排措施'
+        else:
+            will_achieve = False
+            risk_level = 'critical'
+            risk_desc = '❌ 预计将大幅超标，急需减排'
+
+        remaining_quota = max(0, target - current)
+        daily_quota = remaining_quota / max(days_remaining, 1) if days_remaining > 0 else 0
+
+        return {
+            'goal_id': goal['goal_id'],
+            'goal_type': goal_type,
+            'target': target,
+            'current': round(current, 2),
+            'days_total': days_total,
+            'days_passed': days_passed,
+            'days_remaining': days_remaining,
+            'period_progress': round(days_passed / days_total * 100, 1) if days_total > 0 else 0,
+            'emission_progress': round(current / target * 100, 1) if target > 0 else 0,
+            'remaining_quota': round(remaining_quota, 2),
+            'daily_quota': round(daily_quota, 2),
+            'avg_daily_emission': round(avg_daily, 3),
+            'projected_total': round(projected_total, 2),
+            'projected_over': round(projected_over, 2),
+            'projected_under': round(projected_under, 2),
+            'will_achieve': will_achieve,
+            'risk_level': risk_level,
+            'risk_description': risk_desc,
+            'historical_periods_used': len(historical_averages)
+        }
+
+    def get_all_goals_prediction(self, user_id: str,
+                                  reference_date: date = None,
+                                  lookback_periods: int = 4) -> List[Dict]:
+        goals = self.dm.list_goals(user_id, active_only=True)
+        return [self.predict_goal_outcome(user_id, g, reference_date, lookback_periods) for g in goals]
+
     def get_user_summary(self, user_id: str) -> Dict:
         user = self.dm.get_user(user_id)
         if not user:

@@ -55,6 +55,7 @@ class DataManager:
             'created_at': datetime.now().isoformat(),
             'activities': [],
             'goals': [],
+            'templates': [],
             'stats': {}
         }
         self._save_user_data(user_id, user_data)
@@ -183,6 +184,157 @@ class DataManager:
         self._save_user_data(user_id, user_data)
         return added
 
+    def create_template(self, user_id: str, name: str, category: str,
+                        activity_type: str, default_amount: float,
+                        default_notes: str = '', period: str = 'on_demand') -> Optional[Dict]:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return None
+
+        if not self._validate_category(category):
+            return None
+        if not self._validate_activity_type(category, activity_type):
+            return None
+
+        template_id = str(uuid.uuid4())[:8]
+        template = {
+            'template_id': template_id,
+            'name': name,
+            'category': category,
+            'activity_type': activity_type,
+            'default_amount': default_amount,
+            'default_notes': default_notes,
+            'period': period,
+            'created_at': datetime.now().isoformat(),
+            'last_used_at': None,
+            'usage_count': 0
+        }
+        user_data['templates'].append(template)
+        self._save_user_data(user_id, user_data)
+        return template
+
+    def list_templates(self, user_id: str, category: str = None,
+                        period: str = None) -> List[Dict]:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return []
+
+        templates = user_data.get('templates', [])
+        if category:
+            templates = [t for t in templates if t['category'] == category]
+        if period:
+            templates = [t for t in templates if t['period'] == period]
+
+        templates.sort(key=lambda x: x.get('usage_count', 0), reverse=True)
+        return templates
+
+    def get_template(self, user_id: str, template_id: str) -> Optional[Dict]:
+        templates = self.list_templates(user_id)
+        for t in templates:
+            if t['template_id'] == template_id:
+                return t
+        return None
+
+    def apply_template(self, user_id: str, template_id: str,
+                        custom_amount: float = None,
+                        custom_notes: str = None,
+                        activity_date: str = None,
+                        generate_period: str = None) -> List[Dict]:
+        template = self.get_template(user_id, template_id)
+        if not template:
+            return []
+
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return []
+
+        amount = custom_amount if custom_amount is not None else template['default_amount']
+        notes = custom_notes if custom_notes is not None else template['default_notes']
+
+        if activity_date is None:
+            activity_date = date.today().isoformat()
+
+        activities = []
+        if generate_period == 'daily':
+            d = date.fromisoformat(activity_date)
+            for i in range(7):
+                act_date = (d + timedelta(days=i)).isoformat()
+                activity = self.add_activity(user_id, template['category'],
+                                             template['activity_type'], amount,
+                                             act_date, notes)
+                if activity:
+                    activities.append(activity)
+        elif generate_period == 'weekly':
+            d = date.fromisoformat(activity_date)
+            week_start = d - timedelta(days=d.weekday())
+            for i in range(7):
+                act_date = (week_start + timedelta(days=i)).isoformat()
+                activity = self.add_activity(user_id, template['category'],
+                                             template['activity_type'], amount,
+                                             act_date, notes)
+                if activity:
+                    activities.append(activity)
+        else:
+            activity = self.add_activity(user_id, template['category'],
+                                         template['activity_type'], amount,
+                                         activity_date, notes)
+            if activity:
+                activities.append(activity)
+
+        for t in user_data.get('templates', []):
+            if t['template_id'] == template_id:
+                t['usage_count'] = t.get('usage_count', 0) + len(activities)
+                t['last_used_at'] = datetime.now().isoformat()
+                break
+        self._save_user_data(user_id, user_data)
+
+        return activities
+
+    def update_template(self, user_id: str, template_id: str, **kwargs) -> Optional[Dict]:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return None
+
+        for t in user_data.get('templates', []):
+            if t['template_id'] == template_id:
+                for key in ['name', 'category', 'activity_type', 'default_amount',
+                            'default_notes', 'period']:
+                    if key in kwargs:
+                        if key in ['category', 'activity_type']:
+                            if key == 'category' and not self._validate_category(kwargs[key]):
+                                continue
+                            if key == 'activity_type':
+                                cat = kwargs.get('category', t['category'])
+                                if not self._validate_activity_type(cat, kwargs[key]):
+                                    continue
+                        t[key] = kwargs[key]
+                self._save_user_data(user_id, user_data)
+                return t
+        return None
+
+    def delete_template(self, user_id: str, template_id: str) -> bool:
+        user_data = self.get_user(user_id)
+        if user_data is None:
+            return False
+
+        templates = user_data.get('templates', [])
+        original_len = len(templates)
+        user_data['templates'] = [t for t in templates if t['template_id'] != template_id]
+
+        if len(user_data['templates']) < original_len:
+            self._save_user_data(user_id, user_data)
+            return True
+        return False
+
+    def _validate_category(self, category: str) -> bool:
+        return category in self.get_categories()
+
+    def _validate_activity_type(self, category: str, activity_type: str) -> bool:
+        if category == 'electricity' and activity_type == 'grid_electricity':
+            return True
+        valid_types = [t['key'] for t in self.get_activity_types(category)]
+        return activity_type in valid_types
+
     def set_goal(self, user_id: str, goal_type: str, target_value: float,
                  period: str = 'monthly', start_date: str = None,
                  description: str = '') -> Optional[Dict]:
@@ -276,6 +428,19 @@ class DataManager:
 
     def get_categories(self) -> List[str]:
         return list(self.emission_factors.keys())
+
+    def get_available_categories(self) -> List[str]:
+        excluded = ['benchmarks']
+        result = []
+        for cat in self.emission_factors.keys():
+            if cat in excluded:
+                continue
+            types = self.get_activity_types(cat)
+            if cat == 'electricity':
+                result.append(cat)
+            elif types:
+                result.append(cat)
+        return result
 
     def get_activity_types(self, category: str) -> List[Dict]:
         cat_data = self.emission_factors.get(category, {})

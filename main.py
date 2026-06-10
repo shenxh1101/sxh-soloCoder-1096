@@ -312,10 +312,12 @@ class CarbonTrackerCLI:
             self.banner()
             print(self.viz.section(f'📊 活动记录管理 - {self.current_user["name"]}', 62))
             print("  [1] 记录新活动")
-            print("  [2] 查看活动历史")
-            print("  [3] 删除活动记录")
-            print("  [4] 批量导入数据(CSV)")
-            print("  [5] 下载导入模板")
+            print("  [2] 使用常用活动模板")
+            print("  [3] 管理常用活动模板")
+            print("  [4] 查看活动历史")
+            print("  [5] 删除活动记录")
+            print("  [6] 批量导入数据(CSV)")
+            print("  [7] 下载导入模板")
             print("  [0] 返回主菜单")
 
             choice = input("\n  请选择操作: ").strip()
@@ -323,12 +325,16 @@ class CarbonTrackerCLI:
             if choice == '1':
                 self.add_activity_wizard()
             elif choice == '2':
-                self.view_activity_history()
+                self.use_activity_template()
             elif choice == '3':
-                self.delete_activity()
+                self.manage_activity_templates()
             elif choice == '4':
-                self.bulk_import_data()
+                self.view_activity_history()
             elif choice == '5':
+                self.delete_activity()
+            elif choice == '6':
+                self.bulk_import_data()
+            elif choice == '7':
                 self.download_templates()
             elif choice == '0':
                 return
@@ -341,7 +347,7 @@ class CarbonTrackerCLI:
         print(f"\n  ➕ 记录新活动")
         print("  " + "─" * 50)
 
-        categories = self.dm.get_categories()
+        categories = self.dm.get_available_categories()
         category_names = self.calc.CATEGORY_NAMES
 
         cat_items = [{'key': c, 'name': category_names.get(c, c)} for c in categories]
@@ -364,6 +370,10 @@ class CarbonTrackerCLI:
             print("  ⚠️  无效的选择")
 
         types = self.dm.get_activity_types(category)
+        if category == 'electricity' and not types:
+            types = [{'key': 'grid_electricity', 'name': '家庭用电',
+                      'factor': 0.581, 'unit': 'kWh',
+                      'serving_size': 1.0}]
         if not types:
             print("  ⚠️  此类别暂无可选活动类型")
             return
@@ -426,6 +436,294 @@ class CarbonTrackerCLI:
             return True
         except ValueError:
             return False
+
+    def use_activity_template(self):
+        user_id = self.current_user['user_id']
+        templates = self.dm.list_templates(user_id)
+
+        if not templates:
+            print("\n  📭 暂无常用活动模板，请先在「管理常用活动模板」中创建")
+            return
+
+        category_names = self.calc.CATEGORY_NAMES
+
+        print(f"\n  📋 使用常用活动模板")
+        print("  " + "─" * 50)
+
+        def display_template(t):
+            cat_name = category_names.get(t['category'], t['category'])
+            type_name = self._get_type_name(t['category'], t['activity_type'])
+            period_names = {'on_demand': '按需', 'daily': '每日', 'weekly': '每周', 'monthly': '每月'}
+            period = period_names.get(t.get('period', 'on_demand'), t.get('period', ''))
+            used = t.get('usage_count', 0)
+            return f"{t['name']} ({cat_name} - {type_name}) [{period}] 常用: {used}次"
+
+        selected = self.select_from_list(templates, "选择要使用的模板",
+                                          display_func=display_template)
+        if not selected:
+            return
+
+        template = selected
+        print(f"\n  模板: {template['name']}")
+        print(f"  类别: {category_names.get(template['category'], template['category'])}")
+        print(f"  类型: {self._get_type_name(template['category'], template['activity_type'])}")
+        print(f"  默认数量: {template['default_amount']}")
+
+        amount_str = self.input_prompt("  数量 (回车使用默认值)",
+                                        default=str(template['default_amount']))
+        if amount_str is None:
+            return
+        try:
+            amount = float(amount_str)
+        except ValueError:
+            amount = template['default_amount']
+
+        notes = self.input_prompt("  备注 (回车使用默认值)",
+                                    default=template.get('default_notes', ''))
+        if notes is None:
+            return
+
+        default_date = date.today().isoformat()
+        activity_date = self.input_prompt("  活动日期 (YYYY-MM-DD)",
+                                            default=default_date,
+                                            validator=lambda x: self._validate_date(x))
+        if not activity_date:
+            return
+
+        period = template.get('period', 'on_demand')
+        generate_period = None
+        if period in ['daily', 'weekly']:
+            if period == 'daily':
+                msg = f"  是否生成未来7天的记录？"
+            else:
+                msg = f"  是否生成本周每天的记录？"
+            if self.confirm_prompt(msg, default=False):
+                generate_period = period
+
+        activities = self.dm.apply_template(user_id, template['template_id'],
+                                             custom_amount=amount,
+                                             custom_notes=notes,
+                                             activity_date=activity_date,
+                                             generate_period=generate_period)
+
+        if activities:
+            region = self.current_user.get('region', 'national_average')
+            total_emission = sum(
+                self.calc.calculate_activity_emission(act, region) for act in activities
+            )
+            print(f"\n  ✅ 已成功生成 {len(activities)} 条记录!")
+            print(f"     总碳排放: {total_emission:.2f} kg CO₂")
+        else:
+            print("\n  ❌ 生成记录失败")
+
+    def manage_activity_templates(self):
+        user_id = self.current_user['user_id']
+        category_names = self.calc.CATEGORY_NAMES
+
+        while True:
+            self.clear_screen()
+            self.banner()
+            print(self.viz.section(f'📋 常用活动模板管理 - {self.current_user["name"]}', 62))
+
+            templates = self.dm.list_templates(user_id)
+            print(f"\n  已有模板: {len(templates)} 个")
+            if templates:
+                print("  " + "─" * 70)
+                for t in templates:
+                    cat_name = category_names.get(t['category'], t['category'])
+                    type_name = self._get_type_name(t['category'], t['activity_type'])
+                    period_names = {'on_demand': '按需', 'daily': '每日', 'weekly': '每周', 'monthly': '每月'}
+                    period = period_names.get(t.get('period', 'on_demand'), t.get('period', ''))
+                    print(f"  [{t['template_id']}] {t['name']}")
+                    print(f"      {cat_name} - {type_name} | 默认: {t['default_amount']} | [{period}]")
+                    if t.get('last_used_at'):
+                        print(f"      已使用 {t.get('usage_count', 0)} 次 | 上次: {t['last_used_at'][:10]}")
+                print("  " + "─" * 70)
+
+            print("\n  [1] 创建新模板")
+            print("  [2] 修改模板")
+            print("  [3] 删除模板")
+            print("  [0] 返回")
+
+            choice = input("\n  请选择操作: ").strip()
+
+            if choice == '1':
+                self._create_template_wizard(user_id)
+            elif choice == '2':
+                self._update_template_wizard(user_id, templates)
+            elif choice == '3':
+                self._delete_template_wizard(user_id, templates)
+            elif choice == '0':
+                return
+            else:
+                print("  ⚠️  无效的选择")
+
+            input("\n  按 Enter 继续...")
+
+    def _create_template_wizard(self, user_id):
+        print(f"\n  ➕ 创建新模板")
+        print("  " + "─" * 50)
+
+        name = self.input_prompt("  模板名称 (如: 每日通勤)", required=True)
+        if not name:
+            return
+
+        categories = self.dm.get_available_categories()
+        category_names = self.calc.CATEGORY_NAMES
+        cat_items = [{'key': c, 'name': category_names.get(c, c)} for c in categories]
+
+        print("\n  选择活动类别:")
+        for idx, cat in enumerate(cat_items, 1):
+            print(f"  [{idx}] {cat['name']}")
+
+        while True:
+            choice = self.input_prompt("  输入类别编号", required=True)
+            if not choice:
+                return
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(cat_items):
+                    category = cat_items[idx]['key']
+                    break
+            except ValueError:
+                pass
+            print("  ⚠️  无效的选择")
+
+        types = self.dm.get_activity_types(category)
+        if category == 'electricity' and not types:
+            types = [{'key': 'grid_electricity', 'name': '家庭用电',
+                      'factor': 0.581, 'unit': 'kWh', 'serving_size': 1.0}]
+
+        print(f"\n  选择具体活动类型:")
+        for idx, t in enumerate(types, 1):
+            print(f"  [{idx}] {t['name']} ({t['factor']} {t['unit']})")
+
+        while True:
+            choice = self.input_prompt("  输入类型编号", required=True)
+            if not choice:
+                return
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(types):
+                    activity_type = types[idx]['key']
+                    break
+            except ValueError:
+                pass
+            print("  ⚠️  无效的选择")
+
+        default_amount = None
+        while True:
+            amount_str = self.input_prompt("  默认数量", required=True)
+            if amount_str is None:
+                return
+            try:
+                default_amount = float(amount_str)
+                if default_amount > 0:
+                    break
+                print("  ⚠️  数量必须大于0")
+            except ValueError:
+                print("  ⚠️  请输入有效的数字")
+
+        default_notes = self.input_prompt("  默认备注 (可选)", default='')
+        if default_notes is None:
+            return
+
+        print("\n  选择使用周期:")
+        print("  [1] 按需使用 (默认)")
+        print("  [2] 每日")
+        print("  [3] 每周")
+        print("  [4] 每月")
+
+        period_choice = self.input_prompt("  请选择", default="1")
+        period_map = {'1': 'on_demand', '2': 'daily', '3': 'weekly', '4': 'monthly'}
+        period = period_map.get(period_choice, 'on_demand')
+
+        template = self.dm.create_template(user_id, name, category, activity_type,
+                                           default_amount, default_notes, period)
+        if template:
+            print(f"\n  ✅ 模板创建成功! ID: {template['template_id']}")
+        else:
+            print("\n  ❌ 模板创建失败")
+
+    def _update_template_wizard(self, user_id, templates):
+        if not templates:
+            print("\n  📭 暂无模板可修改")
+            return
+
+        def display_template(t):
+            category_names = self.calc.CATEGORY_NAMES
+            cat_name = category_names.get(t['category'], t['category'])
+            type_name = self._get_type_name(t['category'], t['activity_type'])
+            return f"{t['name']} ({cat_name} - {type_name})"
+
+        selected = self.select_from_list(templates, "选择要修改的模板",
+                                          display_func=display_template)
+        if not selected:
+            return
+
+        template = selected
+        print(f"\n  📝 修改模板: {template['name']}")
+        print("  " + "─" * 50)
+        print("  (直接回车保留原值)")
+
+        updates = {}
+
+        new_name = self.input_prompt(f"  模板名称", default=template['name'])
+        if new_name:
+            updates['name'] = new_name
+
+        new_amount_str = self.input_prompt(f"  默认数量", default=str(template['default_amount']))
+        if new_amount_str:
+            try:
+                updates['default_amount'] = float(new_amount_str)
+            except ValueError:
+                pass
+
+        new_notes = self.input_prompt(f"  默认备注", default=template.get('default_notes', ''))
+        if new_notes is not None:
+            updates['default_notes'] = new_notes
+
+        print(f"\n  当前周期: {template.get('period', 'on_demand')}")
+        print("  [1] 按需使用")
+        print("  [2] 每日")
+        print("  [3] 每周")
+        print("  [4] 每月")
+        period_choice = self.input_prompt("  选择周期 (回车不修改)")
+        period_map = {'1': 'on_demand', '2': 'daily', '3': 'weekly', '4': 'monthly'}
+        if period_choice and period_choice in period_map:
+            updates['period'] = period_map[period_choice]
+
+        if updates:
+            updated = self.dm.update_template(user_id, template['template_id'], **updates)
+            if updated:
+                print(f"\n  ✅ 模板更新成功!")
+            else:
+                print("\n  ❌ 模板更新失败")
+        else:
+            print("\n  ℹ️  未进行任何修改")
+
+    def _delete_template_wizard(self, user_id, templates):
+        if not templates:
+            print("\n  📭 暂无模板可删除")
+            return
+
+        def display_template(t):
+            category_names = self.calc.CATEGORY_NAMES
+            cat_name = category_names.get(t['category'], t['category'])
+            type_name = self._get_type_name(t['category'], t['activity_type'])
+            return f"{t['name']} ({cat_name} - {type_name})"
+
+        selected = self.select_from_list(templates, "选择要删除的模板",
+                                          display_func=display_template)
+        if not selected:
+            return
+
+        if self.confirm_prompt(f"  确定要删除模板「{selected['name']}」吗?",
+                                 default=False):
+            if self.dm.delete_template(user_id, selected['template_id']):
+                print(f"\n  ✅ 模板已删除")
+            else:
+                print("\n  ❌ 删除失败")
 
     def view_activity_history(self):
         user_id = self.current_user['user_id']
@@ -571,16 +869,42 @@ class CarbonTrackerCLI:
             return
 
         print(f"\n  正在导入 {file_path} ...")
-        added_count, added, errors = self.importer.import_csv(user_id, file_path, template_key)
+        added_count, added, errors, summary = self.importer.import_csv(user_id, file_path, template_key)
 
-        print(f"\n  导入完成!")
-        print(f"  ✅ 成功导入: {added_count} 条记录")
-        if errors:
-            print(f"  ❌ 出现 {len(errors)} 个问题:")
-            for err in errors[:10]:
-                print(f"     - {err}")
-            if len(errors) > 10:
-                print(f"     ... 还有 {len(errors) - 10} 个问题未显示")
+        print(f"\n  {'═' * 60}")
+        print(f"  📊 导入结果摘要")
+        print(f"  {'═' * 60}")
+        print(f"  模板类型: {summary.get('template', '自动检测')}")
+        print(f"  总行数: {summary.get('total_rows', 0)}")
+        print(f"  {'─' * 60}")
+        print(f"  ✅ 成功: {summary.get('success_count', 0)} 条")
+        print(f"  ⚠️  跳过: {summary.get('skipped_count', 0)} 条")
+        print(f"  ❌ 失败: {summary.get('failed_count', 0)} 条")
+        print(f"  {'─' * 60}")
+
+        if summary.get('success_details'):
+            print(f"\n  ✅ 成功导入明细 (前{len(summary['success_details'])}条):")
+            for item in summary['success_details']:
+                region = self.current_user.get('region', 'national_average')
+                emission = 0
+                if 'activity' in item:
+                    emission = self.calc.calculate_activity_emission(item['activity'], region)
+                print(f"     - [{item.get('row', '?')}] {item.get('date', '')} "
+                      f"{item.get('category_name', '')} - {item.get('type_name', '')}: "
+                      f"{item.get('amount', 0)} → {emission:.2f} kg CO₂")
+
+        if summary.get('skipped_details'):
+            print(f"\n  ⚠️  跳过明细:")
+            for item in summary['skipped_details']:
+                print(f"     - [行{item.get('row', '?')}] {item.get('reason', '')}")
+
+        if summary.get('failed_details'):
+            print(f"\n  ❌ 失败明细:")
+            for item in summary['failed_details']:
+                print(f"     - [行{item.get('row', '?')}] {item.get('reason', '')}")
+
+        if added_count > 0:
+            print(f"\n  💡 提示: 可在「查看活动历史」中查看所有导入的记录")
 
     def download_templates(self):
         templates = self.importer.list_templates()
@@ -636,6 +960,7 @@ class CarbonTrackerCLI:
             print("  [3] 排放占比分析 (ASCII饼图)")
             print("  [4] 排放趋势分析 (折线图)")
             print("  [5] 与平均水平对比")
+            print("  [6] 目标预测视图")
             print("  [0] 返回主菜单")
 
             choice = input("\n  请选择操作: ").strip()
@@ -650,6 +975,8 @@ class CarbonTrackerCLI:
                 self.show_trend_chart()
             elif choice == '5':
                 self.show_benchmark_comparison()
+            elif choice == '6':
+                self.show_goal_prediction()
             elif choice == '0':
                 return
             else:
@@ -863,6 +1190,82 @@ class CarbonTrackerCLI:
             print(f"  🎉 很好! 您的排放比中国平均水平低 {abs(china_pct):.1f}%")
         else:
             print(f"  📍 您的排放与中国平均水平持平")
+
+    def show_goal_prediction(self):
+        user_id = self.current_user['user_id']
+        print(f"\n  🎯 目标预测视图")
+        print("  " + "─" * 70)
+
+        predictions = self.calc.get_all_goals_prediction(user_id)
+
+        if not predictions:
+            print("\n  📭 暂无设置的减排目标，请先在「减排目标」中创建")
+            return
+
+        goal_type_names = {
+            'total_emission': '总排放',
+            'transport': '交通排放',
+            'electricity': '电力排放',
+            'food': '饮食排放',
+            'shopping': '购物排放',
+            'heating': '采暖排放'
+        }
+
+        print(f"\n  {'目标':<12} {'周期':<6} {'进度':>8} {'当前/目标':>16} "
+              f"{'剩余额度':>10} {'日额度':>8} {'预计月底':>10}")
+        print("  " + "─" * 90)
+
+        for pred in predictions:
+            goal_type = goal_type_names.get(pred['goal_type'], pred['goal_type'])
+            period = pred.get('goal_id', '')
+            if pred['period_progress'] >= 100:
+                progress_str = "已结束"
+            else:
+                progress_str = f"{pred['days_passed']}/{pred['days_total']}天"
+
+            ratio_str = f"{pred['current']:>7.1f}/{pred['target']:<7.1f}"
+
+            if pred['remaining_quota'] > 0:
+                remaining_str = f"{pred['remaining_quota']:>9.1f} kg"
+            else:
+                remaining_str = f"  已超 {-pred['remaining_quota']:>5.1f} kg"
+
+            if pred['daily_quota'] > 0:
+                daily_str = f"{pred['daily_quota']:>6.1f} kg"
+            else:
+                daily_str = f"  -"
+
+            if pred['will_achieve']:
+                projected_str = f"✓ 达标"
+                projected_color = "\033[32m"
+            else:
+                if pred['projected_over'] > pred['target'] * 0.2:
+                    projected_str = f"✗ 超{pred['projected_over']:.0f}kg"
+                    projected_color = "\033[31m"
+                else:
+                    projected_str = f"⚠ 超{pred['projected_over']:.0f}kg"
+                    projected_color = "\033[33m"
+
+            print(f"  {goal_type:<12} {progress_str:<8} {pred['emission_progress']:>7.1f}% "
+                  f"{ratio_str:>16} {remaining_str:>12} {daily_str:>10} "
+                  f"{projected_color}{projected_str:>12}\033[0m")
+
+        print("  " + "─" * 90)
+        print(f"\n  📊 详细分析:")
+        for pred in predictions:
+            goal_type = goal_type_names.get(pred['goal_type'], pred['goal_type'])
+            print(f"\n  🎯 {goal_type}目标: {pred['risk_description']}")
+            print(f"     • 周期进度: {pred['period_progress']:.1f}% ({pred['days_passed']}/{pred['days_total']}天)")
+            print(f"     • 排放进度: {pred['emission_progress']:.1f}% ({pred['current']:.1f}/{pred['target']:.1f} kg)")
+            print(f"     • 日均排放: {pred['avg_daily_emission']:.3f} kg/天 (基于{pred['historical_periods_used']}个历史周期)")
+            print(f"     • 剩余额度: {pred['remaining_quota']:.1f} kg (未来{pred['days_remaining']}天)")
+            print(f"     • 每日可用: {pred['daily_quota']:.2f} kg/天")
+            print(f"     • 预计月底: {pred['projected_total']:.1f} kg (目标: {pred['target']:.1f} kg)")
+
+            if not pred['will_achieve'] and pred['projected_over'] > 0:
+                need_reduce_daily = max(0, pred['avg_daily_emission'] - pred['daily_quota'])
+                if need_reduce_daily > 0:
+                    print(f"     • 💡 建议: 每天需再减少 {need_reduce_daily:.2f} kg 排放才能达标")
 
     # ==================== 目标管理 ====================
 

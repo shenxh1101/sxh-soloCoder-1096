@@ -214,9 +214,114 @@ class Suggester:
         saving = suggestion.get('saving_estimation', {})
         base_saving = saving.get('saving_kg_co2', 0)
 
+        category = suggestion.get('category', '')
+        condition = suggestion.get('condition', '')
+        calculated_saving = base_saving
+
+        if category == 'food':
+            if condition == 'high_meat_consumption':
+                weekly_meat = profile.get('weekly_total_meat_servings', 0)
+                weekly_beef = profile.get('weekly_beef_servings', 0)
+
+                if weekly_beef >= 2:
+                    beef_factor = self.calc._get_factor('food', 'beef')
+                    veg_factor = self.calc._get_factor('food', 'vegetables')
+                    beef_serving = self.calc._get_serving_size('food', 'beef')
+                    veg_serving = self.calc._get_serving_size('food', 'vegetables')
+
+                    per_saving = (beef_factor * beef_serving - veg_factor * veg_serving) * 2
+                    calculated_saving = round(per_saving * 4.33, 1)
+                elif weekly_meat >= 10:
+                    pork_factor = self.calc._get_factor('food', 'pork')
+                    chicken_factor = self.calc._get_factor('food', 'chicken')
+                    pork_serving = self.calc._get_serving_size('food', 'pork')
+                    chicken_serving = self.calc._get_serving_size('food', 'chicken')
+
+                    weekly_reduction = min(4, weekly_meat * 0.3)
+                    per_saving = (pork_factor * pork_serving - chicken_factor * chicken_serving) * weekly_reduction
+                    calculated_saving = round(per_saving * 4.33, 1)
+
+            elif condition == 'high_dairy':
+                weekly_dairy = profile.get('weekly_dairy_servings', 0)
+                if weekly_dairy >= 5:
+                    dairy_factor = self.calc._get_factor('food', 'dairy')
+                    dairy_serving = self.calc._get_serving_size('food', 'dairy')
+                    reduction = min(weekly_dairy * 0.4, 3)
+                    per_saving = dairy_factor * dairy_serving * reduction
+                    calculated_saving = round(per_saving * 4.33, 1)
+
+            elif condition == 'general':
+                waste_reduction = saving.get('waste_reduction_kg_weekly', 0)
+                if waste_reduction > 0:
+                    waste_factor = self.calc._get_factor('waste', 'general_waste')
+                    calculated_saving = round(waste_reduction * waste_factor * 4.33, 1)
+
+        elif category == 'shopping':
+            if condition == 'high_shopping':
+                monthly_items = profile.get('monthly_shopping_items', 0)
+                if monthly_items >= 10:
+                    reduced_items = min(5, monthly_items * 0.3)
+                    avg_factor = saving.get('average_kg_co2_per_item', 8.0)
+                    calculated_saving = round(reduced_items * avg_factor, 1)
+
+            elif condition == 'high_clothing':
+                monthly_clothing = profile.get('monthly_clothing_items', 0)
+                if monthly_clothing >= 3:
+                    reduced_items = min(2, monthly_clothing * 0.5)
+                    clothing_factor = self.calc._get_factor('shopping', 'clothing')
+                    calculated_saving = round(reduced_items * clothing_factor, 1)
+
+            elif condition == 'high_electronics':
+                monthly_electronics = profile.get('monthly_electronics_items', 0)
+                if monthly_electronics * 12 >= 2:
+                    electronics_factor = self.calc._get_factor('shopping', 'electronics')
+                    calculated_saving = round(electronics_factor / 12, 1)
+
+            elif condition == 'general':
+                reduced_bags = saving.get('reduced_plastic_bags_monthly', 0)
+                if reduced_bags > 0:
+                    calculated_saving = round(reduced_bags * 0.1, 1)
+
+        elif category == 'electricity':
+            monthly_kwh = profile.get('monthly_electricity_kwh', 0)
+            saving_kwh = saving.get('saving_kwh_per_month', 0)
+
+            if monthly_kwh > 0 and saving_kwh > 0:
+                electricity_factor = self.calc._get_factor('electricity', 'grid_electricity',
+                                                           profile.get('region', 'national_average'))
+                calculated_saving = round(saving_kwh * electricity_factor, 1)
+
+        elif category == 'transport':
+            weekly_km = profile.get('weekly_car_km', 0)
+            if weekly_km > 0:
+                base_act = saving.get('base_activity', '')
+                alt_act = saving.get('alternative_activity', '')
+                distance = saving.get('distance_km', 0)
+
+                if base_act and alt_act:
+                    base_factor = self.calc._get_factor('transport', base_act)
+                    alt_factor = self.calc._get_factor('transport', alt_act)
+
+                    if distance > 0:
+                        actual_ratio = min(weekly_km * 4 / max(distance, 1), 1.5)
+                        calculated_saving = round((base_factor - alt_factor) * distance * actual_ratio, 1)
+                    else:
+                        monthly_km = weekly_km * 4.33
+                        reduction_ratio = 0.2 if condition == 'high_car_usage' else 0.1
+                        calculated_saving = round((base_factor - alt_factor) * monthly_km * reduction_ratio, 1)
+
+        elif category == 'heating':
+            monthly_heating = profile.get('monthly_heating_units', 0)
+            saving_pct = saving.get('saving_percentage', 0)
+            if monthly_heating > 0 and saving_pct > 0:
+                heating_factor = 2.16
+                calculated_saving = round(monthly_heating * heating_factor * saving_pct, 1)
+
+        calculated_saving = max(calculated_saving, 0)
+
         monthly_emission = profile.get('monthly_emission', 0)
-        if monthly_emission > 0 and base_saving > 0:
-            impact_percent = round(base_saving / monthly_emission * 100, 1)
+        if monthly_emission > 0 and calculated_saving > 0:
+            impact_percent = round(calculated_saving / monthly_emission * 100, 1)
         else:
             impact_percent = 0
 
@@ -224,7 +329,7 @@ class Suggester:
             **suggestion,
             'difficulty_name': self.DIFFICULTY_NAMES.get(suggestion.get('difficulty', 'medium'), '中等'),
             'impact_name': self.IMPACT_NAMES.get(suggestion.get('impact', 'medium'), '中等'),
-            'calculated_saving_kg': base_saving,
+            'calculated_saving_kg': calculated_saving,
             'impact_percent': impact_percent
         }
 
